@@ -112,7 +112,9 @@ const getBlueprintColorsRGB = () => Object.values(TERRAIN_MAP as Record<string, 
 export const hasBlueprintLeaks = (mapImageSrc: string): Promise<LeakDetectionResult> => {
   return new Promise((resolve, reject) => {
     // Vite/ESM-compatible way to create a worker.
-    const worker = new Worker(new URL('../workers/leakDetector.worker.ts', import.meta.url), {
+    // Explicitly convert the URL object to a string to avoid potential environment-specific bugs.
+    const workerUrl = new URL('../workers/leakDetector.worker.ts', import.meta.url).href;
+    const worker = new Worker(workerUrl, {
       type: 'module',
     });
 
