@@ -48,7 +48,7 @@ Now, add the **ruined_walls**.
 - Integrate them into their environment. Ruins in a forest might be covered in moss and vines. Ruins on a grassy plain might have grass growing between the stones.
 
 **Step 4: Handling Roads (If Present)**
-This is the final layer. **First, check the blueprint for the \`Road Brown\` color.** If no roads are present in the blueprint, you can skip this step entirely. If roads ARE present, they must intelligently adapt to the terrain they cross.
+This is the final layer. **First, check the blueprint for the \`Road Yellow\` color.** If no roads are present in the blueprint, you can skip this step entirely. If roads ARE present, they must intelligently adapt to the terrain they cross.
 - **On Grass or in Forest:** Render a clear dirt or cobblestone path. The path should look worn into the landscape, not painted on top. Blend the edges softly with the surrounding grass or undergrowth.
 - **Crossing Water:** How you render a road at a body of water depends on the context. If a road blueprint shape clearly passes *over* a water body to connect land on both sides, render a logical **bridge** (e.g., wood, stone) that spans the gap. However, if a road simply leads *to* the water's edge and stops, it should terminate naturally as a dirt path that fades into the shoreline, or perhaps end at a small wooden **dock** or a **ford**. DO NOT build a bridge that leads nowhere.
 - **Through Mountains:** When a road encounters mountains, it MUST NOT be a flat texture on a cliff. You must render it as a **tunnel entrance** leading into the mountain, or as a narrow, winding path cut into the rock face.
@@ -67,13 +67,13 @@ The following list maps the colors in the blueprint to the terrain types you mus
     };
 
     const colorNames: Record<string, string> = {
-        '#166534': 'Grass Green',
-        '#064e3b': 'Forest Green',
-        '#1e40af': 'Water Blue',
-        '#78350f': 'Road Brown',
-        '#4b5563': 'Ruins Grey',
-        '#44403c': 'Mountain Grey',
-        '#111827': 'Black',
+        '#00FF00': 'Lime Green',
+        '#FF00FF': 'Magenta',
+        '#00FFFF': 'Cyan',
+        '#FFFF00': 'Yellow',
+        '#FFA500': 'Orange',
+        '#FF0000': 'Red',
+        '#111827': 'Black', // This is the background color, remains unchanged.
     };
 
     const legend = TERRAINS.map(terrain => {

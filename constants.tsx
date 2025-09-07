@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Terrain } from './types';
 
@@ -9,12 +10,12 @@ const GrassIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w
 const MountainIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a.75.75 0 01.75.75v1.25l1.625.813a.75.75 0 01.375 1.04l-1.5 2.5a.75.75 0 01-1.25-.75V7l-.5-.25-.5.25v.854a.75.75 0 01-1.25.75l-1.5-2.5a.75.75 0 01.375-1.04L8.5 4v-1.25A.75.75 0 0110 2zM4.433 13.067l-2.015-1.511a.75.75 0 01.664-1.332l2.367.296a.75.75 0 01.669.742l-.12 2.399a.75.75 0 01-1.442.27l-.123-.626zM15.567 13.067l2.015-1.511a.75.75 0 00-.664-1.332l-2.367.296a.75.75 0 00-.669.742l.12 2.399a.75.75 0 001.442.27l.123-.626zM10 18a.75.75 0 01-.75-.75V16h-1.5a.75.75 0 010-1.5h1.5v-1.25a.75.75 0 011.5 0V14.5h1.5a.75.75 0 010 1.5H10.75v1.25A.75.75 0 0110 18z" clipRule="evenodd" /></svg>;
 
 export const TERRAINS: Terrain[] = [
-  { id: 'grass', name: 'Grass', color: 'bg-green-800/50', hexColor: '#166534', icon: <GrassIcon /> },
-  { id: 'forest', name: 'Forest', color: 'bg-emerald-900/50', hexColor: '#064e3b', icon: <TreeIcon /> },
-  { id: 'water', name: 'Water', color: 'bg-blue-800/50', hexColor: '#1e40af', icon: <WaterIcon /> },
-  { id: 'road', name: 'Road', color: 'bg-yellow-900/50', hexColor: '#78350f', icon: <RoadIcon /> },
-  { id: 'ruined_walls', name: 'Ruins', color: 'bg-gray-600/50', hexColor: '#4b5563', icon: <WallIcon /> },
-  { id: 'mountains', name: 'Mountains', color: 'bg-stone-700/50', hexColor: '#44403c', icon: <MountainIcon /> },
+  { id: 'grass', name: 'Grass', color: 'bg-green-800/50', hexColor: '#00FF00', icon: <GrassIcon /> },       // Lime Green
+  { id: 'forest', name: 'Forest', color: 'bg-emerald-900/50', hexColor: '#FF00FF', icon: <TreeIcon /> },     // Magenta
+  { id: 'water', name: 'Water', color: 'bg-blue-800/50', hexColor: '#00FFFF', icon: <WaterIcon /> },         // Cyan
+  { id: 'road', name: 'Road', color: 'bg-yellow-900/50', hexColor: '#FFFF00', icon: <RoadIcon /> },         // Yellow
+  { id: 'ruined_walls', name: 'Ruins', color: 'bg-gray-600/50', hexColor: '#FFA500', icon: <WallIcon /> },     // Orange
+  { id: 'mountains', name: 'Mountains', color: 'bg-stone-700/50', hexColor: '#FF0000', icon: <MountainIcon /> }, // Red
 ];
 
 export const TERRAIN_MAP = TERRAINS.reduce((acc, terrain) => {
