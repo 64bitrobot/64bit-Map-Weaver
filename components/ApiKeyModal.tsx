@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface ApiKeyModalProps {
@@ -18,47 +19,68 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
       aria-labelledby="apiKeyModalTitle"
     >
       <div
-        className="bg-gray-800 border border-amber-500/50 rounded-lg shadow-2xl p-6 sm:p-8 max-w-lg w-full text-gray-300"
+        className="bg-gray-800 border border-amber-500/50 rounded-lg shadow-2xl p-6 sm:p-8 max-w-md w-full text-gray-300 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="apiKeyModalTitle" className="text-2xl font-bold text-amber-300 mb-4">
-          API Key Security Notice
+          API Key Security
         </h2>
-        <div className="space-y-4 text-gray-400">
+        <div className="space-y-4 text-sm text-gray-400">
           <p>
-            You are in control of your API key. This application is designed to run entirely in your browser.
+            This app runs entirely in your browser. Your API key is never stored on a server.
           </p>
           <ul className="list-disc list-inside space-y-2 pl-2">
             <li>
-              Your API key is <strong className="text-amber-300">stored in your browser's memory</strong> for the duration of this session and is never saved on a server by us.
+              Your key is held in browser memory and sent <strong className="text-amber-300">directly to Google's API</strong>.
             </li>
             <li>
-              It is sent directly from your browser to the Google Gemini API to generate maps.
+              Storing keys client-side can be risky if your browser or device is compromised.
             </li>
           </ul>
-          <p className="font-semibold text-gray-300">Potential Risks of Client-Side Keys:</p>
-          <p>
-            While we've taken steps to keep things secure on our end, storing keys in a browser can be risky if your computer or browser is compromised by malicious extensions or scripts.
-          </p>
-          <p className="font-semibold text-gray-300">Our Recommendations:</p>
+
+          <p className="font-semibold text-gray-300 pt-2">Best Practices:</p>
            <ul className="list-disc list-inside space-y-2 pl-2">
             <li>
-              Use an API key specifically generated for this application.
+              Use a <strong className="text-amber-300">dedicated API key</strong> for this app.
             </li>
             <li>
-               Consider setting usage limits on your key through your Google AI Studio dashboard.
+               Set usage limits on your key in your Google AI Studio dashboard.
             </li>
             <li>
-              Revoke or delete the key when you are finished using the application for maximum security.
+              <strong className="text-amber-300">Delete the key</strong> when you're finished.
             </li>
           </ul>
+        </div>
+        <div className="mt-6 pt-6 border-t border-gray-700">
+          <h3 className="text-xl font-bold text-sky-300 mb-3">
+            For Local Development
+          </h3>
+          <div className="space-y-3 text-gray-400">
+             <p>
+              For better security, load your key from a local environment file instead of pasting it.
+            </p>
+            <ol className="list-decimal list-inside space-y-3 pl-2">
+                <li>
+                  Create a file named <code className="bg-gray-700 text-amber-300 px-1 py-0.5 rounded-sm">.env.local</code> in the project root.
+                </li>
+                <li>
+                  Add your API key to this file:
+                    <pre className="bg-gray-900/70 p-2 rounded-md mt-2 text-sm text-gray-300">
+                        <code>GEMINI_API_KEY=YOUR_API_KEY_HERE</code>
+                    </pre>
+                </li>
+                <li>
+                  Save, then restart your development server. The "Use provided environment key" option will now be functional.
+                </li>
+            </ol>
+          </div>
         </div>
         <div className="mt-8 text-right">
           <button
             onClick={onClose}
             className="bg-amber-600 text-white font-bold py-2 px-6 rounded-md hover:bg-amber-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-amber-400"
           >
-            I Understand & Accept
+            I Understand
           </button>
         </div>
       </div>

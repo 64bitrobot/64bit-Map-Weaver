@@ -55,7 +55,7 @@ export const useMapGeneration = () => {
             return;
         }
         if (!apiKey.trim()) {
-            setError("An API key is required. Please enter one at the top, or if in AI Studio, ensure the environment key is available.");
+            setError("An API key is required. Please enter one at the top or ensure the environment key is available.");
             return;
         }
         

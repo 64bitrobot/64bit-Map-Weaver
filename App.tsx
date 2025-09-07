@@ -227,7 +227,7 @@ const App: React.FC = () => {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 onFocus={handleApiKeyFocus}
-                placeholder={useStudioKey ? "Using key from AI Studio" : "Enter your Google Gemini API Key..."}
+                placeholder={useStudioKey ? "Using environment API key" : "Enter your Google Gemini API Key..."}
                 disabled={useStudioKey}
                 className={`w-full pl-10 pr-10 py-2 border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-500 ${
                   apiKeyError ? 'border-red-500/70' : 'border-gray-600'
@@ -259,7 +259,7 @@ const App: React.FC = () => {
                 className="h-4 w-4 rounded border-gray-500 text-amber-600 bg-gray-700 focus:ring-amber-500 focus:ring-offset-gray-900 cursor-pointer"
               />
               <label htmlFor="useStudioKey" className="text-sm text-gray-400 select-none cursor-pointer">
-                Use key provided by AI Studio environment
+                Use provided environment key
               </label>
             </div>
              {apiKeyError && <p className="text-xs text-red-400 mt-2">{apiKeyError}</p>}
