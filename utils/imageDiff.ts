@@ -1,95 +1,10 @@
-
 import { TERRAIN_MAP } from '../constants';
-import type { Terrain } from '../types';
+import type { Terrain, MapStyle } from '../types';
 
 export interface LeakDetectionResult {
   needsRefinement: boolean;
   leakMapUrl: string | null;
 }
-
-// Helper function to load an image from a data URL
-const loadImage = (src: string): Promise<HTMLImageElement> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err);
-    img.src = src;
-  });
-};
-
-/**
- * Compares two images and generates a "heatmap" data URL showing the differences.
- * @param baseImageSrc The original image data URL.
- * @param changedImageSrc The new image data URL.
- * @returns A Promise that resolves with the data URL of the heatmap image.
- */
-export const generateDiffMap = async (baseImageSrc: string, changedImageSrc: string): Promise<string> => {
-  try {
-    const [baseImg, changedImg] = await Promise.all([
-      loadImage(baseImageSrc),
-      loadImage(changedImageSrc),
-    ]);
-
-    const width = baseImg.width;
-    const height = baseImg.height;
-
-    // Create canvases to draw images and get pixel data
-    const baseCanvas = document.createElement('canvas');
-    baseCanvas.width = width;
-    baseCanvas.height = height;
-    const baseCtx = baseCanvas.getContext('2d');
-    if (!baseCtx) throw new Error('Could not get base canvas context');
-    baseCtx.drawImage(baseImg, 0, 0);
-
-    const changedCanvas = document.createElement('canvas');
-    changedCanvas.width = width;
-    changedCanvas.height = height;
-    const changedCtx = changedCanvas.getContext('2d');
-    if (!changedCtx) throw new Error('Could not get changed canvas context');
-    changedCtx.drawImage(changedImg, 0, 0);
-    
-    // Create heatmap canvas
-    const heatmapCanvas = document.createElement('canvas');
-    heatmapCanvas.width = width;
-    heatmapCanvas.height = height;
-    const heatmapCtx = heatmapCanvas.getContext('2d');
-    if (!heatmapCtx) throw new Error('Could not get heatmap canvas context');
-
-    const baseData = baseCtx.getImageData(0, 0, width, height).data;
-    const changedData = changedCtx.getImageData(0, 0, width, height).data;
-    const heatmapImageData = heatmapCtx.createImageData(width, height);
-    const heatmapData = heatmapImageData.data;
-
-    const COLOR_DIFF_THRESHOLD = 35 * 35; // Squared distance threshold
-    const HEATMAP_COLOR = [255, 0, 0, 150]; // Red with alpha
-
-    for (let i = 0; i < baseData.length; i += 4) {
-      const r1 = baseData[i];
-      const g1 = baseData[i + 1];
-      const b1 = baseData[i + 2];
-
-      const r2 = changedData[i];
-      const g2 = changedData[i + 1];
-      const b2 = changedData[i + 2];
-
-      const diff = Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2);
-
-      if (diff > COLOR_DIFF_THRESHOLD) {
-        heatmapData[i] = HEATMAP_COLOR[0];
-        heatmapData[i + 1] = HEATMAP_COLOR[1];
-        heatmapData[i + 2] = HEATMAP_COLOR[2];
-        heatmapData[i + 3] = HEATMAP_COLOR[3];
-      }
-    }
-
-    heatmapCtx.putImageData(heatmapImageData, 0, 0);
-    return heatmapCanvas.toDataURL();
-  } catch (error) {
-    console.error("Failed to generate diff map:", error);
-    return Promise.reject("Could not generate difference map for revision.");
-  }
-};
-
 
 // --- Blueprint Leak Detection ---
 
@@ -119,15 +34,55 @@ const colorDistanceSq = (r1, g1, b1, r2, g2, b2) => {
     return Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2);
 };
 
+// --- Shape Analysis Helpers (self-contained for the worker) ---
+
+// Calculates the cross product of three points to determine turn direction.
+const crossProduct = (p1, p2, p3) => {
+  return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+};
+
+// Computes the convex hull of a set of points using the Monotone Chain algorithm.
+const getConvexHull = (points) => {
+  if (points.length <= 2) return [...points];
+  
+  const sortedPoints = [...points].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
+
+  const buildHull = (points) => {
+    const hull = [];
+    for (const point of points) {
+      while (hull.length >= 2 && crossProduct(hull[hull.length - 2], hull[hull.length - 1], point) <= 0) {
+        hull.pop();
+      }
+      hull.push(point);
+    }
+    return hull;
+  };
+
+  const lowerHull = buildHull(sortedPoints);
+  const upperHull = buildHull([...sortedPoints].reverse());
+  return lowerHull.slice(0, -1).concat(upperHull.slice(0, -1));
+};
+
+// Calculates the area of a polygon using the shoelace formula.
+const polygonArea = (points) => {
+    let area = 0;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        area += (points[j].x + points[i].x) * (points[j].y - points[i].y);
+    }
+    return Math.abs(area / 2.0);
+};
+
+
 /**
  * The main analysis function that runs inside the worker.
- * This version identifies clusters of leaked pixels to avoid false positives from scattered noise.
+ * This version identifies clusters of leaked pixels and analyzes their shape to avoid false positives.
  */
 const performLeakDetection = async (
     mapImageSrc, 
     blueprintColorsRGB,
     clusterSizeThreshold,
-    colorMatchThresholdSq
+    colorMatchThresholdSq,
+    flatnessThresholdSq // New: for detecting any flat color patch
 ) => {
     try {
         const img = await loadImage(mapImageSrc);
@@ -141,43 +96,96 @@ const performLeakDetection = async (
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
 
+        // This array will store a '1' for any pixel that is part of a leak.
+        const leaks = new Uint8Array(width * height);
+        
+        // --- Pass 1: Flat Patch Detection ---
+        // This pass looks for large areas of ANY nearly-identical color.
+        if (flatnessThresholdSq && flatnessThresholdSq > 0) {
+            const visitedForFlatness = new Uint8Array(width * height);
+            for (let i = 0; i < data.length; i += 4) {
+                const pixelIndex = i / 4;
+                if (visitedForFlatness[pixelIndex]) continue;
+
+                const startR = data[i];
+                const startG = data[i + 1];
+                const startB = data[i + 2];
+
+                const flatClusterIndices = [];
+                const queue = [pixelIndex];
+                visitedForFlatness[pixelIndex] = 1;
+
+                while (queue.length > 0) {
+                    const currentIdx = queue.shift();
+                    flatClusterIndices.push(currentIdx);
+
+                    const x = currentIdx % width;
+                    const y = Math.floor(currentIdx / width);
+                    
+                    const neighbors = [];
+                    if (y > 0) neighbors.push(currentIdx - width); // Top
+                    if (y < height - 1) neighbors.push(currentIdx + width); // Bottom
+                    if (x > 0) neighbors.push(currentIdx - 1); // Left
+                    if (x < width - 1) neighbors.push(currentIdx + 1); // Right
+                    
+                    for (const neighborIdx of neighbors) {
+                        if (!visitedForFlatness[neighborIdx]) {
+                             const nIdx = neighborIdx * 4;
+                             const nR = data[nIdx], nG = data[nIdx + 1], nB = data[nIdx + 2];
+                             if (colorDistanceSq(startR, startG, startB, nR, nG, nB) < flatnessThresholdSq) {
+                                visitedForFlatness[neighborIdx] = 1;
+                                queue.push(neighborIdx);
+                             }
+                        }
+                    }
+                }
+
+                if (flatClusterIndices.length > clusterSizeThreshold) {
+                    for (const idx of flatClusterIndices) {
+                        leaks[idx] = 1;
+                    }
+                }
+            }
+        }
+        
+        // --- Pass 2: Blueprint Color Leak Detection ---
+        // This pass looks specifically for colors that match the blueprint palette.
+        for (let i = 0; i < data.length; i += 4) {
+            const pixelIndex = i / 4;
+            if (leaks[pixelIndex]) continue; // Already flagged by flatness check.
+
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            
+            for (const blueprintColor of blueprintColorsRGB) {
+                if (colorDistanceSq(r, g, b, blueprintColor.r, blueprintColor.g, blueprintColor.b) < colorMatchThresholdSq) {
+                    leaks[pixelIndex] = 1;
+                    break; // Found a match, move to next pixel
+                }
+            }
+        }
+        
+        // --- Pass 3: Analyze combined leaks and build heatmap ---
         const heatmapCanvas = new OffscreenCanvas(width, height);
         const heatmapCtx = heatmapCanvas.getContext('2d');
         if (!heatmapCtx) throw new Error('WORKER: Could not get heatmap OffscreenCanvas context.');
         const heatmapImageData = heatmapCtx.createImageData(width, height);
         const heatmapData = heatmapImageData.data;
         
-        // 1. First pass: Identify all leak pixels and draw the full heatmap for visualization.
-        const leaks = new Uint8Array(width * height);
         let totalLeakedPixels = 0;
-
-        for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            
-            let isLeak = false;
-            for (const blueprintColor of blueprintColorsRGB) {
-                if (colorDistanceSq(r, g, b, blueprintColor.r, blueprintColor.g, blueprintColor.b) < colorMatchThresholdSq) {
-                    isLeak = true;
-                    break;
-                }
-            }
-
-            if (isLeak) {
-                const pixelIndex = i / 4;
-                leaks[pixelIndex] = 1;
+        for (let i = 0; i < leaks.length; i++) {
+             if (leaks[i]) {
                 totalLeakedPixels++;
-
-                heatmapData[i] = 255;     // R
-                heatmapData[i + 1] = 0;   // G (Red)
-                heatmapData[i + 2] = 0;   // B
-                heatmapData[i + 3] = 180; // Alpha
+                const dataIdx = i * 4;
+                heatmapData[dataIdx] = 255;     // R
+                heatmapData[dataIdx + 1] = 0;   // G (Red)
+                heatmapData[dataIdx + 2] = 0;   // B
+                heatmapData[dataIdx + 3] = 180; // Alpha
             }
         }
         
-        // Optimization: If the total number of leaked pixels is less than the cluster threshold,
-        // it's impossible to form a failing cluster. We can pass the check immediately.
+        // Optimization: If total leaked pixels is low, no need for expensive clustering.
         if (totalLeakedPixels < clusterSizeThreshold) {
             heatmapCtx.putImageData(heatmapImageData, 0, 0);
             const blob = await heatmapCanvas.convertToBlob({ type: 'image/png' });
@@ -189,34 +197,32 @@ const performLeakDetection = async (
             });
         }
         
-        // 2. Second pass: Cluster analysis using Breadth-First Search (BFS).
+        // --- Pass 4: Cluster and shape analysis (on combined leaks) ---
         const visited = new Uint8Array(width * height);
         let needsRefinement = false;
         
+        const SOLIDITY_THRESHOLD = 0.75; // Clusters must be >75% solid to be considered "blobs".
+
         for (let i = 0; i < leaks.length; i++) {
+            if (needsRefinement) break;
             if (leaks[i] && !visited[i]) {
-                // Start of a new, unvisited cluster
-                let clusterSize = 0;
-                const queue = [i]; // Store index directly
+                const clusterPoints = [];
+                const queue = [i];
                 visited[i] = 1;
 
                 while (queue.length > 0) {
                     const currentIdx = queue.shift();
-                    clusterSize++;
-                    
                     const x = currentIdx % width;
                     const y = Math.floor(currentIdx / width);
+                    clusterPoints.push({ x, y });
                     
-                    // Check neighbors in a square radius to catch 'clumped' or 'dithered' patterns
-                    const searchRadius = 2; // Check a 5x5 area (2 pixels in each direction)
+                    const searchRadius = 3;
                     for (let ny = -searchRadius; ny <= searchRadius; ny++) {
                         for (let nx = -searchRadius; nx <= searchRadius; nx++) {
-                            if (nx === 0 && ny === 0) continue; // Skip the current pixel itself
-
+                            if (nx === 0 && ny === 0) continue;
                             const checkX = x + nx;
                             const checkY = y + ny;
 
-                            // Boundary check
                             if (checkX >= 0 && checkX < width && checkY >= 0 && checkY < height) {
                                 const neighborIdx = checkY * width + checkX;
                                 if (leaks[neighborIdx] && !visited[neighborIdx]) {
@@ -228,26 +234,32 @@ const performLeakDetection = async (
                     }
                 }
                 
+                const clusterSize = clusterPoints.length;
                 if (clusterSize > clusterSizeThreshold) {
-                    needsRefinement = true;
-                    break;
+                    const hull = getConvexHull(clusterPoints);
+                    if (hull.length > 2) {
+                        const hullArea = polygonArea(hull);
+                        if (hullArea > 0) {
+                            const solidity = clusterSize / hullArea;
+                            // A high solidity means the shape is convex and dense (a blob).
+                            // A low solidity means it's concave, has holes, or is "snakey".
+                            if (solidity > SOLIDITY_THRESHOLD) {
+                                needsRefinement = true;
+                            }
+                        }
+                    }
                 }
             }
         }
         
-        // 3. Finalize and return results.
+        // Finalize and return results.
         heatmapCtx.putImageData(heatmapImageData, 0, 0);
         const blob = await heatmapCanvas.convertToBlob({ type: 'image/png' });
 
         return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                resolve({
-                    needsRefinement: needsRefinement,
-                    leakMapUrl: reader.result,
-                });
-            };
-            reader.onerror = () => resolve({ needsRefinement: needsRefinement, leakMapUrl: null });
+            reader.onloadend = () => resolve({ needsRefinement, leakMapUrl: reader.result });
+            reader.onerror = () => resolve({ needsRefinement, leakMapUrl: null });
             reader.readAsDataURL(blob);
         });
 
@@ -257,34 +269,115 @@ const performLeakDetection = async (
     }
 };
 
+/**
+ * Compares two images pixel by pixel and generates a heatmap of the differences.
+ */
+const performDiffing = async (imageBase64, imageNewBase64, diffThresholdSq) => {
+    try {
+        const [imgBase, imgNew] = await Promise.all([
+            loadImage(imageBase64),
+            loadImage(imageNewBase64)
+        ]);
+
+        if (imgBase.width !== imgNew.width || imgBase.height !== imgNew.height) {
+            throw new Error('WORKER: Image dimensions do not match for diffing.');
+        }
+
+        const { width, height } = imgBase;
+        
+        const canvasBase = new OffscreenCanvas(width, height);
+        const ctxBase = canvasBase.getContext('2d', { willReadFrequently: true });
+        ctxBase.drawImage(imgBase, 0, 0);
+        const dataBase = ctxBase.getImageData(0, 0, width, height).data;
+
+        const canvasNew = new OffscreenCanvas(width, height);
+        const ctxNew = canvasNew.getContext('2d', { willReadFrequently: true });
+        ctxNew.drawImage(imgNew, 0, 0);
+        const dataNew = ctxNew.getImageData(0, 0, width, height).data;
+        
+        const diffCanvas = new OffscreenCanvas(width, height);
+        const diffCtx = diffCanvas.getContext('2d');
+        const diffImageData = diffCtx.createImageData(width, height);
+        const diffData = diffImageData.data;
+
+        let hasDifference = false;
+        for (let i = 0; i < dataBase.length; i += 4) {
+            const r1 = dataBase[i], g1 = dataBase[i+1], b1 = dataBase[i+2];
+            const r2 = dataNew[i], g2 = dataNew[i+1], b2 = dataNew[i+2];
+
+            if (colorDistanceSq(r1, g1, b1, r2, g2, b2) > diffThresholdSq) {
+                diffData[i] = 255;   // Magenta R
+                diffData[i+1] = 0;   // Magenta G
+                diffData[i+2] = 255; // Magenta B
+                diffData[i+3] = 180; // Alpha
+                hasDifference = true;
+            }
+        }
+        
+        if (!hasDifference) {
+            return null; // No changes detected, no need for a map.
+        }
+
+        diffCtx.putImageData(diffImageData, 0, 0);
+        const blob = await diffCanvas.convertToBlob({ type: 'image/png' });
+        
+        return new Promise((resolve) => {
+             const reader = new FileReader();
+             reader.onloadend = () => resolve(reader.result);
+             reader.onerror = () => resolve(null);
+             reader.readAsDataURL(blob);
+        });
+
+    } catch (error) {
+        console.error("WORKER: Error during diff generation:", error);
+        return null;
+    }
+};
+
 
 // --- WORKER MESSAGE HANDLER ---
 
 self.onmessage = async (event) => {
-    const { mapImageSrc, blueprintColorsRGB, clusterSizeThreshold, colorMatchThresholdSq } = event.data;
-    
-    if (!mapImageSrc || !blueprintColorsRGB) {
-        self.postMessage({ error: 'WORKER: Invalid arguments received.' });
-        return;
-    }
+    const { command } = event.data;
 
-    const { needsRefinement, leakMapUrl } = await performLeakDetection(mapImageSrc, blueprintColorsRGB, clusterSizeThreshold, colorMatchThresholdSq);
-    
-    self.postMessage({ result: needsRefinement, leakMapUrl });
+    if (command === 'detectLeaks') {
+        const { mapImageSrc, blueprintColorsRGB, clusterSizeThreshold, colorMatchThresholdSq, flatnessThresholdSq } = event.data;
+        const { needsRefinement, leakMapUrl } = await performLeakDetection(mapImageSrc, blueprintColorsRGB, clusterSizeThreshold, colorMatchThresholdSq, flatnessThresholdSq);
+        self.postMessage({ result: needsRefinement, leakMapUrl });
+    } else if (command === 'generateDiff') {
+        const { imageBase64, imageNewBase64, diffThresholdSq } = event.data;
+        const diffMapUrl = await performDiffing(imageBase64, imageNewBase64, diffThresholdSq);
+        self.postMessage({ diffMapUrl });
+    } else {
+        self.postMessage({ error: 'WORKER: Unknown command received.' });
+    }
 };
 `;
+
+const createWorker = () => {
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(blob);
+  const worker = new Worker(workerUrl);
+
+  // Return a function to clean up the worker and its URL
+  const cleanup = () => {
+    URL.revokeObjectURL(workerUrl);
+    worker.terminate();
+  };
+
+  return { worker, cleanup };
+};
+
 
 /**
  * Checks if a generated map image contains significant "blueprint leaks" using a Web Worker.
  * @param mapImageSrc The data URL of the generated map.
+ * @param mapStyle The visual style of the map being analyzed.
  * @returns A Promise that resolves to an object containing a boolean and the leak map URL.
  */
-export const hasBlueprintLeaks = (mapImageSrc: string): Promise<LeakDetectionResult> => {
+export const hasBlueprintLeaks = (mapImageSrc: string, mapStyle: MapStyle): Promise<LeakDetectionResult> => {
   return new Promise((resolve, reject) => {
-    // Create a worker from an in-memory script to avoid pathing issues.
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
+    const { worker, cleanup } = createWorker();
 
     worker.onmessage = (event) => {
       if (event.data.error) {
@@ -294,28 +387,79 @@ export const hasBlueprintLeaks = (mapImageSrc: string): Promise<LeakDetectionRes
         const { result, leakMapUrl } = event.data;
         resolve({ needsRefinement: result, leakMapUrl: leakMapUrl || null });
       }
-      URL.revokeObjectURL(workerUrl); // Clean up the object URL
-      worker.terminate();
+      cleanup();
     };
 
     worker.onerror = (error) => {
       console.error("Error in leak detection worker:", error);
-      // Fail safe: assume no leaks if the worker fails to prevent getting stuck in a refinement loop.
       resolve({ needsRefinement: false, leakMapUrl: null });
-      URL.revokeObjectURL(workerUrl); // Clean up the object URL
-      worker.terminate();
+      cleanup();
     };
 
-    const CLUSTER_SIZE_THRESHOLD = 250; // A contiguous area of this many pixels is considered a leak.
-    const COLOR_MATCH_THRESHOLD_SQ = 100; // Increased from 9 for more tolerance
+    let clusterSizeThreshold: number;
+    let colorMatchThresholdSq: number;
+    let flatnessThresholdSq: number | undefined;
+    
+    switch (mapStyle) {
+      case 'pixel':
+        clusterSizeThreshold = 1000;
+        colorMatchThresholdSq = 400;
+        flatnessThresholdSq = undefined; // Don't run flatness check on pixel art
+        break;
+      case 'photorealistic':
+      default:
+        clusterSizeThreshold = 400;
+        colorMatchThresholdSq = 100; // Stricter: Was 250. Prevents flagging textured areas like beaches.
+        flatnessThresholdSq = 50; // Stricter: Was 100. Requires areas to be more uniform to be "flat".
+        break;
+    }
     
     const message = {
+      command: 'detectLeaks',
       mapImageSrc,
       blueprintColorsRGB: getBlueprintColorsRGB(),
-      clusterSizeThreshold: CLUSTER_SIZE_THRESHOLD,
-      colorMatchThresholdSq: COLOR_MATCH_THRESHOLD_SQ,
+      clusterSizeThreshold,
+      colorMatchThresholdSq,
+      flatnessThresholdSq,
     };
 
     worker.postMessage(message);
   });
+};
+
+/**
+ * Generates a visual diff map between two images using a Web Worker.
+ * @param imageBase The original image data URL.
+ * @param imageNew The new image data URL to compare against the original.
+ * @returns A Promise that resolves to a data URL for the diff map, or null if no differences are found.
+ */
+export const generateDiffMap = (imageBase: string, imageNew: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+        const { worker, cleanup } = createWorker();
+
+        worker.onmessage = (event) => {
+            if (event.data.error) {
+                console.error(event.data.error);
+                resolve(null);
+            } else {
+                resolve(event.data.diffMapUrl || null);
+            }
+            cleanup();
+        };
+
+        worker.onerror = (error) => {
+            console.error("Error in diff generation worker:", error);
+            resolve(null);
+            cleanup();
+        };
+
+        const message = {
+            command: 'generateDiff',
+            imageBase64: imageBase,
+            imageNewBase64: imageNew,
+            diffThresholdSq: 100, // Squared distance; 10*10 in one channel
+        };
+
+        worker.postMessage(message);
+    });
 };

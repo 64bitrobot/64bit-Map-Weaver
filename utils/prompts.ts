@@ -1,60 +1,49 @@
-
 import { TERRAINS } from '../constants';
 import type { MapStyle } from '../types';
 
 export const generatePromptWithLegend = (style: MapStyle): string => {
+    let stylePreamble = '';
     let baseLayerInstruction = '';
+    let finalStyleInstruction = '';
+
     switch (style) {
         case 'pixel':
+            stylePreamble = 'You are an expert pixel artist AI specializing in 16-bit retro RPG maps.';
             baseLayerInstruction = 'a seamless, 16-bit pixel art texture of dirt ground';
-            break;
-        case 'sketch':
-            baseLayerInstruction = 'a seamless, hand-drawn sketch texture of ground on parchment paper';
+            finalStyleInstruction = `**Final Output Style:** The final image MUST be in a **16-bit pixel art style**, suitable for a retro RPG. Use a limited, vibrant color palette. Features like trees, rocks, and water should be represented with clear, blocky sprites. Absolutely no photorealistic elements, anti-aliasing, or smooth gradients should be present.`;
             break;
         case 'photorealistic':
         default:
+            stylePreamble = 'You are a master fantasy cartographer AI.';
             baseLayerInstruction = 'a seamless, photorealistic texture of packed earth or sparse dirt';
+            finalStyleInstruction = `**Final Output Style:** The final image must be **photorealistic**, top-down perspective, and suitable for use as a D&D battle map. The lighting should be neutral and even.`;
             break;
     }
 
     const basePrompt = `**AI Directive: Fantasy Map Generation from Blueprint**
 
-You are a master fantasy cartographer AI. Your task is to create a high-quality, top-down Dungeons & Dragons battle map from a single color-coded blueprint image.
+${stylePreamble} Your mission is to meticulously follow a step-by-step process to convert a color-coded blueprint into a high-quality, top-down Dungeons & Dragons battle map. While the steps provide structure, the final image must look like a single, organic environment.
 
-**Generation Process:**
+**Core Rule: Natural Blending is MANDATORY**
+- At every step, you MUST avoid creating hard, artificial lines between different terrains.
+- Edges where terrains meet (e.g., forest and grass) MUST have a soft, natural transition (an "ecotone"). A forest's edge should thin out into the grassland. A mountain's base should have scree and foothills that merge with the lowlands.
 
-1.  **Create the Base Layer:** Your first and most crucial step is to generate a full-canvas base layer. This layer should be **${baseLayerInstruction}**. This texture will serve as the foundation for the entire map and should be visible in any areas not covered by another terrain type from the blueprint.
+**Step-by-Step Rendering Process:**
 
-2.  **Apply the Blueprint:** Once the base layer is established, you must "paint" the terrains specified in the blueprint on top of it, ensuring they match the overall art style.
+1.  **Step 1: The Foundation**
+    - Create a full-canvas base layer of **${baseLayerInstruction}**. This is the ground that exists under everything else.
 
-3.  **Blend, Don't Replace:** Do not simply copy-paste the blueprint colors. You must render textures corresponding to each color and blend them seamlessly both with the underlying Base Layer and with each other at their borders. The Base Layer should remain visible in areas not covered by the blueprint, creating a natural ground floor for the entire map.
+2.  **Step 2: Render Primary Terrains**
+    - On top of the foundation, render the main environmental features according to the blueprint colors: **Grass, Forest, Water, and Mountains**.
+    - As you render each area, ensure its borders blend realistically with any adjacent terrain from this step. For example, shorelines must be realistic, with sandy or pebbly banks where water meets grass.
 
-**Terrain Layering & Interaction Rules (Follow these steps conceptually):**
-
-**Step 1: The Foundation - Base Terrains**
-First, render the foundational landscape on top of the base layer. This includes the areas marked for **grass**, **forest**, and **mountains**.
-- **Blending is Key:** Do not create hard, artificial lines between these terrains. Instead, create natural, blended transitions. For example:
-    - The edge of a forest should thin out, with sparse trees giving way to the grassy plains.
-    - Mountains should have foothills that gradually merge with the surrounding terrain.
-
-**Step 2: Carving with Water**
-Next, introduce the **water** features.
-- Treat water as a force that shapes the land. Where the blueprint indicates water, you will "carve" it into the foundational layer.
-- Create realistic shorelines where water meets land (e.g., sandy banks next to grass, rocky edges next to mountains).
-
-**Step 3: Placing Structures**
-Now, add the **ruined_walls**.
-- These structures should be placed *on top of* the existing terrain. They are not part of the base land.
-- Integrate them into their environment. Ruins in a forest might be covered in moss and vines. Ruins on a grassy plain might have grass growing between the stones.
-
-**Step 4: Handling Roads (If Present)**
-This is the final layer. **First, check the blueprint for the \`Road Yellow\` color.** If no roads are present in the blueprint, you can skip this step entirely. If roads ARE present, they must intelligently adapt to the terrain they cross.
-- **On Grass or in Forest:** Render a clear dirt or cobblestone path. The path should look worn into the landscape, not painted on top. Blend the edges softly with the surrounding grass or undergrowth.
-- **Crossing Water:** How you render a road at a body of water depends on the context. If a road blueprint shape clearly passes *over* a water body to connect land on both sides, render a logical **bridge** (e.g., wood, stone) that spans the gap. However, if a road simply leads *to* the water's edge and stops, it should terminate naturally as a dirt path that fades into the shoreline, or perhaps end at a small wooden **dock** or a **ford**. DO NOT build a bridge that leads nowhere.
-- **Through Mountains:** When a road encounters mountains, it MUST NOT be a flat texture on a cliff. You must render it as a **tunnel entrance** leading into the mountain, or as a narrow, winding path cut into the rock face.
+3.  **Step 3: Integrate Structures & Paths**
+    - Render the **Ruins** and **Roads** on top of the previously rendered terrain. These elements must look integrated, not just placed on top.
+    - **Ruins:** Must be weathered and overgrown. Ruins in a forest should have moss; ruins in a field should have grass growing through cracks.
+    - **Roads:** Must adapt to the terrain they cross. A road over grass is a dirt path. A road over water requires a logical **bridge**. A road into a mountain should be a **tunnel entrance** or a path cut into the rock face.
 
 **Blueprint Color Mapping:**
-The following list maps the colors in the blueprint to the terrain types you must render. Use this as your guide for placement.
+This list maps the blueprint colors to the specific terrain you must render in the steps above.
 `;
 
     const textureDescriptions: Record<string, string> = {
@@ -67,12 +56,12 @@ The following list maps the colors in the blueprint to the terrain types you mus
     };
 
     const colorNames: Record<string, string> = {
-        '#00FF00': 'Lime Green',
-        '#FF00FF': 'Magenta',
-        '#00FFFF': 'Cyan',
-        '#FFFF00': 'Yellow',
-        '#FFA500': 'Orange',
-        '#FF0000': 'Red',
+        '#76B947': 'Bright Green',
+        '#223C3C': 'Very Dark Slate Gray',
+        '#4AB4A9': 'Teal Green',
+        '#D2B48C': 'Tan',
+        '#8A89A6': 'Lavender Gray',
+        '#60544D': 'Dark Taupe',
         '#111827': 'Black', // This is the background color, remains unchanged.
     };
 
@@ -82,19 +71,5 @@ The following list maps the colors in the blueprint to the terrain types you mus
         return `*   **COLOR:** \`${terrain.hexColor}\`${colorName} -> **TERRAIN:** ${description}`;
     }).join('\n');
 
-    let styleInstructions = '';
-    switch (style) {
-        case 'pixel':
-            styleInstructions = `**Final Output Style:** The final image must be in a **16-bit pixel art style**, suitable for a retro RPG. Use a limited, vibrant color palette. Features like trees, rocks, and water should be represented with clear, blocky sprites.`;
-            break;
-        case 'sketch':
-            styleInstructions = `**Final Output Style:** The final image must be a **hand-drawn sketch**, as if made with pencil and ink on aged parchment paper. Use techniques like cross-hatching and stippling for shading and texture. Lines should be imperfect and have a hand-drawn quality. The overall feel should be that of a map from an old fantasy novel or module book.`;
-            break;
-        case 'photorealistic':
-        default:
-            styleInstructions = `**Final Output Style:** The final image must be **photorealistic**, top-down perspective, and suitable for use as a D&D battle map. The lighting should be neutral and even.`;
-            break;
-    }
-
-    return `${basePrompt}\n${legend}\n\n${styleInstructions}`;
+    return `${basePrompt}\n${legend}\n\n${finalStyleInstruction}`;
 };

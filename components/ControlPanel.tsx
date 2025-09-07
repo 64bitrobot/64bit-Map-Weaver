@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Tool } from './Toolbar';
 import type { MapStyle } from '../types';
@@ -22,7 +21,14 @@ interface ControlPanelProps {
   onMapStyleChange: (style: MapStyle) => void;
   maxRefinements: number;
   onMaxRefinementsChange: (refinements: number) => void;
+  onManualRefine: () => void;
 }
+
+const WandIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+    </svg>
+);
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ 
   onGenerate, 
@@ -43,6 +49,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onMapStyleChange,
   maxRefinements,
   onMaxRefinementsChange,
+  onManualRefine,
 }) => {
   const isBrushToolActive = currentTool === 'brush';
 
@@ -98,7 +105,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <h3 className="text-lg font-bold text-amber-300 mb-4">Generation</h3>
         <div className="mb-4">
           <label className="block text-sm font-medium text-amber-300 mb-2">Map Style</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
                 onClick={() => onMapStyleChange('photorealistic')}
                 className={`py-2 px-2 text-sm rounded-md transition-colors disabled:opacity-50 ${mapStyle === 'photorealistic' ? 'bg-amber-600 text-white font-bold' : 'bg-gray-600 hover:bg-gray-500'}`}
@@ -108,17 +115,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             </button>
             <button
                 onClick={() => onMapStyleChange('pixel')}
-                className={`py-2 px-2 text-sm rounded-md transition-colors disabled:opacity-50 ${mapStyle === 'pixel' ? 'bg-amber-600 text-white font-bold' : 'bg-gray-600 hover:bg-gray-500'}`}
-                disabled={isLoading}
+                className={`py-2 px-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${mapStyle === 'pixel' ? 'bg-amber-600 text-white font-bold' : 'bg-gray-600 hover:bg-gray-500'}`}
+                disabled={true}
+                title="Pixel art style is temporarily disabled."
             >
                 Pixel Art
-            </button>
-            <button
-                onClick={() => onMapStyleChange('sketch')}
-                className={`py-2 px-2 text-sm rounded-md transition-colors disabled:opacity-50 ${mapStyle === 'sketch' ? 'bg-amber-600 text-white font-bold' : 'bg-gray-600 hover:bg-gray-500'}`}
-                disabled={isLoading}
-            >
-                Sketch
             </button>
           </div>
         </div>
@@ -178,6 +179,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             className="bg-sky-600 text-white py-2 px-4 rounded-md hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isOverlayVisible ? 'Hide Blueprint' : 'Show Blueprint'}
+          </button>
+          <button
+            onClick={onManualRefine}
+            disabled={isLoading || !isMapGenerated}
+            title={!isMapGenerated ? "Generate a map first" : "Send the current map for one more refinement step"}
+            className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            <WandIcon />
+            Manual Refinement
           </button>
         </div>
       </div>

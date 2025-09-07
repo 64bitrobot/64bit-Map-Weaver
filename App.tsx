@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TERRAIN_MAP } from './constants';
 import DrawingCanvas from './components/DrawingCanvas';
@@ -6,12 +5,11 @@ import TerrainPalette from './components/TerrainPalette';
 import ControlPanel from './components/ControlPanel';
 import GeneratedMap from './components/GeneratedMap';
 import Toolbar, { Tool } from './components/Toolbar';
-import { VectorObject, VectorPoint, VectorShape, VectorLine, ModalImageData, MapStyle } from './types';
-import RevisionHistory from './components/RevisionHistory';
+import { VectorObject, VectorPoint, VectorShape, VectorLine, ModalImageData, MapStyle, AnalysisRecord } from './types';
 import ImageModal from './components/ImageModal';
 import ApiKeyModal from './components/ApiKeyModal';
 import { useMapGeneration } from './hooks/useMapGeneration';
-import AnalysisResults from './components/AnalysisResults';
+import GenerationLog from './components/GenerationLog';
 import { generateRandomObjects } from './utils/randomFill';
 
 const App: React.FC = () => {
@@ -48,10 +46,10 @@ const App: React.FC = () => {
       error,
       generatedImage,
       blueprintImage,
-      rejectedMaps,
       analysisHistory,
       generateMap,
       clearGeneration,
+      manualRefine,
   } = useMapGeneration();
 
   // --- API KEY VALIDATION & MODAL ---
@@ -199,9 +197,19 @@ const App: React.FC = () => {
     const effectiveApiKey = useStudioKey ? (process.env.GEMINI_API_KEY || '') : apiKey;
     generateMap(vectorObjects, rasterizeVectorsToImage, effectiveApiKey, mapStyle, maxRefinements);
   };
+
+  const handleManualRefine = () => {
+    const effectiveApiKey = useStudioKey ? (process.env.GEMINI_API_KEY || '') : apiKey;
+    manualRefine(effectiveApiKey, mapStyle);
+  };
   
-  const handleAnalysisImageClick = (image: string, leakMap: string) => {
-    setModalImage({ image, leakMap, heatmap: null, blueprint: blueprintImage });
+  const handleAnalysisImageClick = (logEntry: AnalysisRecord) => {
+    setModalImage({ 
+        image: logEntry.mapImage, 
+        leakMap: logEntry.leakMap, 
+        aiChangeMap: logEntry.aiChangeMap,
+        blueprint: blueprintImage 
+    });
   };
 
   const selectedTerrain = selectedTerrainId ? TERRAIN_MAP[selectedTerrainId] : null;
@@ -294,15 +302,11 @@ const App: React.FC = () => {
               error={error} 
               isOverlayVisible={isOverlayVisible}
               blueprintImage={blueprintImage}
-              onImageClick={(image) => setModalImage({ image, heatmap: null, leakMap: null, blueprint: blueprintImage })}
+              onImageClick={(image) => setModalImage({ image, leakMap: null, aiChangeMap: null, blueprint: blueprintImage })}
             />
-            <AnalysisResults 
+            <GenerationLog
                 analysisHistory={analysisHistory}
                 onImageClick={handleAnalysisImageClick}
-            />
-            <RevisionHistory 
-                rejectedMaps={rejectedMaps} 
-                onImageClick={(data) => setModalImage({ ...data, blueprint: blueprintImage })}
             />
           </div>
 
@@ -334,6 +338,7 @@ const App: React.FC = () => {
               onMapStyleChange={setMapStyle}
               maxRefinements={maxRefinements}
               onMaxRefinementsChange={handleMaxRefinementsChange}
+              onManualRefine={handleManualRefine}
             />
           </aside>
         </main>
@@ -341,9 +346,9 @@ const App: React.FC = () => {
       {modalImage && (
         <ImageModal 
             imageSrc={modalImage.image}
-            heatmapSrc={modalImage.heatmap}
             blueprintSrc={modalImage.blueprint}
             leakMapSrc={modalImage.leakMap}
+            aiChangeMapSrc={modalImage.aiChangeMap}
             alt="Refinement history detail"
             onClose={() => setModalImage(null)} 
         />

@@ -1,8 +1,7 @@
-
 import { useState, useCallback } from 'react';
 import { generateMapFromDrawing, refineGeneratedMap, createAiClient } from '../services/geminiService';
 import { generatePromptWithLegend } from '../utils/prompts';
-import { generateDiffMap, hasBlueprintLeaks } from '../utils/imageDiff';
+import { hasBlueprintLeaks, generateDiffMap } from '../utils/imageDiff';
 import type { MapStyle, VectorObject, AnalysisRecord } from '../types';
 
 /**
@@ -40,7 +39,6 @@ export const useMapGeneration = () => {
     const [error, setError] = useState<string | null>(null);
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [blueprintImage, setBlueprintImage] = useState<string | null>(null);
-    const [rejectedMaps, setRejectedMaps] = useState<{ revision: number; image: string; heatmap: string; }[]>([]);
     const [analysisHistory, setAnalysisHistory] = useState<AnalysisRecord[]>([]);
 
     const generateMap = useCallback(async (
@@ -77,52 +75,75 @@ export const useMapGeneration = () => {
         setIsLoading(true);
         setError(null);
         setGeneratedImage(null);
-        setRejectedMaps([]);
         setAnalysisHistory([]);
+        const localAnalysisHistory: AnalysisRecord[] = [];
 
         const generationPrompt = generatePromptWithLegend(mapStyle);
 
         try {
+            // --- Initial Generation ---
             setLoadingMessage("Generating initial map...");
             let currentMapUrl = await generateMapFromDrawing(aiClient, blueprintData, generationPrompt);
-            
-            let revisionCount = 0;
-            while (revisionCount < maxRefinements) {
-                setLoadingMessage(`Analyzing ${revisionCount + 1}/${maxRefinements}...`);
-                
-                const analysisResult = await hasBlueprintLeaks(currentMapUrl);
-                
-                if (analysisResult.leakMapUrl) {
-                    setAnalysisHistory(prev => [...prev, {
-                        revision: revisionCount + 1,
-                        analyzedMap: currentMapUrl,
-                        leakMap: analysisResult.leakMapUrl,
-                        passed: !analysisResult.needsRefinement,
-                    }]);
-                }
+            let previousMapUrl = currentMapUrl;
 
-                if (!analysisResult.needsRefinement) {
-                    setLoadingMessage(`Refinement complete.`);
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    break;
-                }
+            // --- Initial Analysis ---
+            setLoadingMessage(`Analyzing initial map...`);
+            let analysisResult = await hasBlueprintLeaks(currentMapUrl, mapStyle);
+            let passedCheck = !analysisResult.needsRefinement;
 
-                revisionCount++;
-                setLoadingMessage(`Refining ${revisionCount}/${maxRefinements}...`);
+            // --- Log Initial Step ---
+            const isFinalAfterInitial = passedCheck || maxRefinements === 0;
+            localAnalysisHistory.push({
+                revision: 1,
+                mapImage: currentMapUrl,
+                aiChangeMap: null,
+                leakMap: analysisResult.leakMapUrl!,
+                passed: passedCheck,
+                isFinal: isFinalAfterInitial,
+                finalReason: isFinalAfterInitial ? (passedCheck ? 'passed' : 'limit_reached') : null,
+            });
+            setAnalysisHistory([...localAnalysisHistory]);
+
+            // --- Refinement Loop ---
+            let refinementCount = 0;
+            while (!passedCheck && refinementCount < maxRefinements) {
+                refinementCount++;
                 
-                const previousMapUrl = currentMapUrl;
-                currentMapUrl = await refineGeneratedMap(aiClient, previousMapUrl, blueprintData, mapStyle);
+                // --- Refine ---
+                setLoadingMessage(`Refining (Attempt ${refinementCount}/${maxRefinements})...`);
+                previousMapUrl = currentMapUrl;
+                currentMapUrl = await refineGeneratedMap(aiClient, currentMapUrl, mapStyle);
+
+                // --- Generate AI Change Map ---
+                setLoadingMessage(`Creating AI change map...`);
+                const aiChangeMap = await generateDiffMap(previousMapUrl, currentMapUrl);
+
+                // --- Analyze Refined Map ---
+                setLoadingMessage(`Analyzing (Attempt ${refinementCount + 1}/${maxRefinements + 1})...`);
+                analysisResult = await hasBlueprintLeaks(currentMapUrl, mapStyle);
+                passedCheck = !analysisResult.needsRefinement;
                 
-                const heatmapUrl = await generateDiffMap(previousMapUrl, currentMapUrl);
-                const rejectedVersion = { revision: revisionCount, image: previousMapUrl, heatmap: heatmapUrl };
-                setRejectedMaps(prev => [...prev, rejectedVersion]);
-                
-                if (revisionCount === maxRefinements) {
-                    setLoadingMessage(`Max refinements reached.`);
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                }
+                const isFinalAfterRefinement = passedCheck || refinementCount >= maxRefinements;
+
+                // --- Log Refinement Step ---
+                localAnalysisHistory.push({
+                    revision: refinementCount + 1,
+                    mapImage: currentMapUrl,
+                    aiChangeMap: aiChangeMap,
+                    leakMap: analysisResult.leakMapUrl!,
+                    passed: passedCheck,
+                    isFinal: isFinalAfterRefinement,
+                    finalReason: isFinalAfterRefinement ? (passedCheck ? 'passed' : 'limit_reached') : null,
+                });
+                setAnalysisHistory([...localAnalysisHistory]);
             }
+            
+            if (passedCheck) setLoadingMessage('Quality check passed!');
+            else setLoadingMessage('Max refinements reached.');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
             setGeneratedImage(currentMapUrl);
+
         } catch (err: unknown) {
             setError(parseErrorMessage(err));
         } finally {
@@ -130,12 +151,76 @@ export const useMapGeneration = () => {
             setLoadingMessage('');
         }
     }, []);
+    
+    const manualRefine = useCallback(async (
+        apiKey: string,
+        mapStyle: MapStyle
+    ) => {
+        if (!generatedImage || isLoading) {
+            return;
+        }
+        if (!apiKey.trim()) {
+            setError("An API key is required for manual refinement.");
+            return;
+        }
+        
+        let aiClient;
+        try {
+            aiClient = createAiClient(apiKey.trim());
+        } catch(err) {
+            setError(parseErrorMessage(err));
+            return;
+        }
+        
+        setIsLoading(true);
+        setError(null);
+        setLoadingMessage("Performing manual refinement...");
+
+        const localAnalysisHistory = [...analysisHistory];
+        const lastRevision = localAnalysisHistory.length > 0 ? localAnalysisHistory[localAnalysisHistory.length - 1] : null;
+
+        if (lastRevision && lastRevision.isFinal) {
+            lastRevision.isFinal = false;
+            lastRevision.finalReason = null;
+        }
+
+        try {
+            const previousMapUrl = generatedImage;
+            const currentMapUrl = await refineGeneratedMap(aiClient, previousMapUrl, mapStyle);
+
+            setLoadingMessage("Creating AI change map...");
+            const aiChangeMap = await generateDiffMap(previousMapUrl, currentMapUrl);
+
+            setLoadingMessage("Analyzing refined map...");
+            const analysisResult = await hasBlueprintLeaks(currentMapUrl, mapStyle);
+            const passedCheck = !analysisResult.needsRefinement;
+
+            localAnalysisHistory.push({
+                revision: (lastRevision?.revision || 0) + 1,
+                mapImage: currentMapUrl,
+                aiChangeMap: aiChangeMap,
+                leakMap: analysisResult.leakMapUrl!,
+                passed: passedCheck,
+                isFinal: true,
+                finalReason: passedCheck ? 'passed' : 'limit_reached',
+                isManual: true,
+            });
+            
+            setAnalysisHistory(localAnalysisHistory);
+            setGeneratedImage(currentMapUrl);
+
+        } catch (err: unknown) {
+            setError(parseErrorMessage(err));
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    }, [generatedImage, isLoading, analysisHistory]);
 
     const clearGeneration = useCallback(() => {
         setGeneratedImage(null);
         setBlueprintImage(null);
         setError(null);
-        setRejectedMaps([]);
         setAnalysisHistory([]);
     }, []);
 
@@ -145,9 +230,9 @@ export const useMapGeneration = () => {
         error,
         generatedImage,
         blueprintImage,
-        rejectedMaps,
         analysisHistory,
         generateMap,
         clearGeneration,
+        manualRefine,
     };
 };

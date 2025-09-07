@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { ModalImageData } from '../types';
 
@@ -31,7 +32,8 @@ const RevisionHistory: React.FC<RevisionHistoryProps> = ({ rejectedMaps, onImage
           <div key={revision} className="flex-shrink-0 w-48 text-center group">
             <div className="relative">
               <button
-                onClick={() => onImageClick({ image, heatmap, blueprint: null, leakMap: null })}
+                // FIX: Added 'aiChangeMap: null' to conform to the ModalImageData type.
+                onClick={() => onImageClick({ image, leakMap: heatmap, aiChangeMap: null, blueprint: null })}
                 className="bg-gray-900 rounded-md overflow-hidden border border-gray-600 block w-full hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all"
               >
                 <img src={image} alt={`Revision ${revision}`} className="w-full h-32 object-cover" />

@@ -1,20 +1,13 @@
-
 import React, { useState } from 'react';
 
 interface ImageModalProps {
   imageSrc: string;
-  heatmapSrc: string | null;
   blueprintSrc: string | null;
   leakMapSrc: string | null;
+  aiChangeMapSrc: string | null;
   alt: string;
   onClose: () => void;
 }
-
-const HeatmapIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 6a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm1 4a1 1 0 100 2h2a1 1 0 100-2H8z" clipRule="evenodd" />
-  </svg>
-);
 
 const BlueprintIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -28,13 +21,20 @@ const LeakIcon = () => (
     </svg>
 );
 
-type Overlay = 'heatmap' | 'blueprint' | 'leakMap';
+const AiChangesIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+    </svg>
+);
 
-const ImageModal: React.FC<ImageModalProps> = ({ imageSrc, heatmapSrc, blueprintSrc, leakMapSrc, alt, onClose }) => {
+
+type Overlay = 'blueprint' | 'leakMap' | 'aiChangeMap';
+
+const ImageModal: React.FC<ImageModalProps> = ({ imageSrc, blueprintSrc, leakMapSrc, aiChangeMapSrc, alt, onClose }) => {
   const [overlays, setOverlays] = useState({
-    heatmap: false,
     blueprint: false,
     leakMap: !!leakMapSrc, // Default to on if available
+    aiChangeMap: !!aiChangeMapSrc, // Default to on if available
   });
 
   const toggleOverlay = (overlay: Overlay) => {
@@ -58,15 +58,15 @@ const ImageModal: React.FC<ImageModalProps> = ({ imageSrc, heatmapSrc, blueprint
             {overlays.blueprint && blueprintSrc && (
                 <img src={blueprintSrc} alt="Blueprint overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-lg opacity-60" />
             )}
-            {overlays.heatmap && heatmapSrc && (
-                <img src={heatmapSrc} alt="Heatmap overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-lg" />
-            )}
              {overlays.leakMap && leakMapSrc && (
                 <img src={leakMapSrc} alt="Leak map overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-lg" />
             )}
+            {overlays.aiChangeMap && aiChangeMapSrc && (
+                <img src={aiChangeMapSrc} alt="AI change map overlay" className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-lg" />
+            )}
         </div>
 
-        <div className="flex-shrink-0 flex items-center justify-center gap-4">
+        <div className="flex-shrink-0 flex items-center justify-center flex-wrap gap-4">
             {blueprintSrc && (
                 <button
                     onClick={() => toggleOverlay('blueprint')}
@@ -77,16 +77,6 @@ const ImageModal: React.FC<ImageModalProps> = ({ imageSrc, heatmapSrc, blueprint
                     {overlays.blueprint ? 'Hide Blueprint' : 'Show Blueprint'}
                 </button>
             )}
-            {heatmapSrc && (
-                <button
-                    onClick={() => toggleOverlay('heatmap')}
-                    className={`flex items-center px-4 py-2 rounded-md text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/50 focus:ring-amber-400
-                        ${overlays.heatmap ? 'bg-amber-600 hover:bg-amber-500' : 'bg-gray-700 hover:bg-gray-600'}`}
-                >
-                    <HeatmapIcon />
-                    {overlays.heatmap ? 'Hide Heatmap' : 'Show Heatmap'}
-                </button>
-            )}
             {leakMapSrc && (
                  <button
                     onClick={() => toggleOverlay('leakMap')}
@@ -95,6 +85,16 @@ const ImageModal: React.FC<ImageModalProps> = ({ imageSrc, heatmapSrc, blueprint
                 >
                     <LeakIcon />
                     {overlays.leakMap ? 'Hide Leak Map' : 'Show Leak Map'}
+                </button>
+            )}
+            {aiChangeMapSrc && (
+                 <button
+                    onClick={() => toggleOverlay('aiChangeMap')}
+                    className={`flex items-center px-4 py-2 rounded-md text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/50 focus:ring-fuchsia-400
+                        ${overlays.aiChangeMap ? 'bg-fuchsia-600 hover:bg-fuchsia-500' : 'bg-gray-700 hover:bg-gray-600'}`}
+                >
+                    <AiChangesIcon />
+                    {overlays.aiChangeMap ? 'Hide AI Changes' : 'Show AI Changes'}
                 </button>
             )}
         </div>

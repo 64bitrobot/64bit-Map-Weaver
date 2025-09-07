@@ -31,16 +31,20 @@ export type VectorObject = VectorShape | VectorLine;
 
 export interface ModalImageData {
   image: string;
-  heatmap: string | null;
   blueprint: string | null;
   leakMap: string | null;
+  aiChangeMap: string | null;
 }
 
-export type MapStyle = 'photorealistic' | 'pixel' | 'sketch';
+export type MapStyle = 'photorealistic' | 'pixel';
 
 export interface AnalysisRecord {
   revision: number;
-  analyzedMap: string;
+  mapImage: string;
+  aiChangeMap: string | null;
   leakMap: string;
   passed: boolean;
+  isFinal: boolean;
+  finalReason: 'passed' | 'limit_reached' | null;
+  isManual?: boolean;
 }

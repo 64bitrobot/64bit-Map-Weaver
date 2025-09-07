@@ -12,8 +12,8 @@ import { pointInPolygon } from './vectorUtils';
  */
 export const generateRandomObjects = (width: number, height: number): VectorObject[] => {
   const newObjects: VectorObject[] = [];
-  const numShapes = Math.floor(Math.random() * 10) + 8;
-  const MAX_PLACEMENT_ATTEMPTS = 50; // Increased attempts for better placement
+  const numShapes = Math.floor(Math.random() * 9) + 7; // New range: 7 to 15
+  const MAX_PLACEMENT_ATTEMPTS = 50;
   
   // Exclude 'road' from being a fillable terrain type
   const fillableTerrains = Object.values(TERRAIN_MAP).filter(t => t.id !== 'road');
@@ -26,7 +26,8 @@ export const generateRandomObjects = (width: number, height: number): VectorObje
     // Attempt to place a shape, checking for polygon overlap.
     for (let attempt = 0; attempt < MAX_PLACEMENT_ATTEMPTS; attempt++) {
       const centerPoint: VectorPoint = { x: Math.random() * width, y: Math.random() * height };
-      const radius = (Math.random() * 0.2 + 0.1) * Math.min(width, height);
+      // Increased radius for bigger blobs: from (0.1 to 0.3) to (0.15 to 0.4) of the canvas's smaller dimension
+      const radius = (Math.random() * 0.25 + 0.15) * Math.min(width, height);
       const points: VectorPoint[] = [];
       const pointCount = 15; // Number of random points to generate for the hull
 
